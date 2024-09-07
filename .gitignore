@@ -1,0 +1,12 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/Artifacts.Api/bin
+/Artifacts.Api/obj
+/Artifacts.EntityFramework/bin/Debug/net8.0
+/Artifacts.EntityFramework/obj
+/Artifacts.Exception/obj
+/Artifacts.Exception/.vs/Artifacts.Exceptions/FileContentIndex
+/Artifacts.Exception/bin/Debug/net8.0
+/.vs
