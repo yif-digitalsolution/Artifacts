@@ -4,10 +4,11 @@ using System.Linq.Expressions;
 
 namespace Artifacts.EntityFramework;
 
-public class Repository<T> : IRepository<T>, IDisposable where T : class, IEntity, IAuditableEntity, new()
+public class Repository<T> : IRepository<T> where T : class, IEntity, IAuditableEntity, new()
 {
     private readonly DbContext _dbContext;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private bool _disposed = false;
     public Repository(DbContext dbContext, IHttpContextAccessor httpContextAccessor)
     {
         _dbContext = dbContext;
@@ -20,9 +21,10 @@ public class Repository<T> : IRepository<T>, IDisposable where T : class, IEntit
         {
             //TODO: Validar que el usuario que esta insertando sea el mismo que creo el registro
             entity.CreatedDate = DateTime.Now;
-            //entity.CreatedBy = _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
-            //entity.LastModifiedBy = _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
+            entity.CreatedBy = 1;//_httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
+            entity.LastModifiedBy = 1;// _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
             entity.LastModifiedDate = DateTime.Now;
+            
             await _dbContext.Set<T>().AddAsync(entity);
             await _dbContext.SaveChangesAsync();
             return entity;
@@ -82,14 +84,42 @@ public class Repository<T> : IRepository<T>, IDisposable where T : class, IEntit
         }
     }
 
-    public async Task<IEnumerable<T>> SearchASync(Expression<Func<T, bool>> predicate)
+    public async Task<IEnumerable<T>> SearchAsync(Expression<Func<T, bool>> predicate)
     {
         var result = await _dbContext.Set<T>().Where(predicate).ToListAsync();
         return result;
     }
 
-    public void Dispose()
+
+    public async Task<T?> First(Expression<Func<T, bool>> predicate)
     {
-        throw new NotImplementedException();
+        return await _dbContext.Set<T>().FirstOrDefaultAsync(predicate);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed)
+        {
+            if (disposing)
+            {
+                // Liberar los recursos administrados
+                _dbContext?.Dispose();
+            }
+
+            // Marcar el objeto como descartado para evitar liberar más de una vez
+            _disposed = true;
+        }
+    }
+
+    // Implementar IDisposable
+    //public void Dispose()
+    //{
+    //    Dispose(true);
+    //    GC.SuppressFinalize(this);
+    //}
+    public DbContext DbContext()
+    {
+        return _dbContext;
+
     }
 }

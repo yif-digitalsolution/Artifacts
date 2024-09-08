@@ -11,3 +11,5 @@
 /Artifacts.Exception/bin/Debug/net8.0
 /.vs
 /Artifacts.Exception
+/Utils/bin/Debug/net8.0
+/Utils/obj
