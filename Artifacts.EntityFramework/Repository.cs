@@ -4,7 +4,7 @@ using System.Linq.Expressions;
 
 namespace Artifacts.EntityFramework;
 
-public class Repository<T> : IRepository<T> where T : class, IEntity, IAuditableEntity, new()
+public class Repository<T> : IRepository<T> where T : class, IEntity, new ()//IAuditableEntity, new()
 {
     private readonly DbContext _dbContext;
     private readonly IHttpContextAccessor _httpContextAccessor;
@@ -20,10 +20,13 @@ public class Repository<T> : IRepository<T> where T : class, IEntity, IAuditable
         try
         {
             //TODO: Validar que el usuario que esta insertando sea el mismo que creo el registro
-            entity.CreatedDate = DateTime.Now;
-            entity.CreatedBy = 1;//_httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
-            entity.LastModifiedBy = 1;// _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
-            entity.LastModifiedDate = DateTime.Now;
+            if (entity is IAuditableEntity auditableEntity)
+            {
+                auditableEntity.CreatedDate = DateTime.Now;
+                auditableEntity.CreatedBy = 1;//_httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
+                auditableEntity.LastModifiedBy = 1;// _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
+                auditableEntity.LastModifiedDate = DateTime.Now;
+            }
             
             await _dbContext.Set<T>().AddAsync(entity);
             await _dbContext.SaveChangesAsync();
@@ -43,11 +46,13 @@ public class Repository<T> : IRepository<T> where T : class, IEntity, IAuditable
         }
 
         //TODO: Validar que el usuario que esta actualizando sea el mismo que creo el registro
-
-        //entity.LastModifiedBy = _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
-        entity.LastModifiedDate = DateTime.Now;
-        entity.CreatedDate = result.CreatedDate;
-        entity.CreatedBy = result.CreatedBy;
+        if (entity is IAuditableEntity auditableEntity && result is IAuditableEntity resultAuditable)
+        {
+            auditableEntity.LastModifiedBy = 1; //_httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
+            auditableEntity.LastModifiedDate = DateTime.Now;
+            auditableEntity.CreatedDate = resultAuditable.CreatedDate;
+            auditableEntity.CreatedBy = resultAuditable.CreatedBy;
+        }
         _dbContext.Update(entity);
         await _dbContext.SaveChangesAsync();
         return entity;
