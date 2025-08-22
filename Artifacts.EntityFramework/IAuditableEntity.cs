@@ -1,6 +1,6 @@
 ﻿namespace Artifacts.EntityFramework;
 
-public interface IAuditableEntity
+public interface IAuditableEntity : IEntity
 {
     DateTime CreatedDate { get; set; }
     int CreatedBy { get; set; }

@@ -1,15 +1,16 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
+using Utils.Exceptions;
 
 namespace Artifacts.EntityFramework;
 
-public class Repository<T> : IRepository<T> where T : class, IEntity, new ()//IAuditableEntity, new()
+public class Repository<T,TContext> : IRepository<T, TContext> where T : class, IEntity, new () where TContext : DbContext //IAuditableEntity, new()
 {
-    private readonly DbContext _dbContext;
+    private readonly TContext _dbContext;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private bool _disposed = false;
-    public Repository(DbContext dbContext, IHttpContextAccessor httpContextAccessor)
+    public Repository(TContext dbContext, IHttpContextAccessor httpContextAccessor)
     {
         _dbContext = dbContext;
         _httpContextAccessor = httpContextAccessor;
@@ -45,7 +46,6 @@ public class Repository<T> : IRepository<T> where T : class, IEntity, new ()//IA
             throw new Exception("No se encontró el registro para actualizar");
         }
 
-        //TODO: Validar que el usuario que esta actualizando sea el mismo que creo el registro
         if (entity is IAuditableEntity auditableEntity && result is IAuditableEntity resultAuditable)
         {
             auditableEntity.LastModifiedBy = 1; //_httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
@@ -62,66 +62,65 @@ public class Repository<T> : IRepository<T> where T : class, IEntity, new ()//IA
         var entity = _dbContext.Set<T>().FirstOrDefault(x => x.Id == id);
         if (entity == null)
         {
-            //TODO: Hacer un log y exception 
-            return false;
+            throw new NotFoundException($"No se encontro {nameof(T)} con el Id = {id}");
         }
 
         _dbContext.Set<T>().Remove(entity);
-        _dbContext.SaveChanges();
+        await _dbContext.SaveChangesAsync();
         return true;
     }
 
-    public async Task<T?> GetByIdAsync(int id)
+    public async Task<T?> GetByIdAsync(int id, params Expression<Func<T, object>>[] includes)
     {
-        return await _dbContext.Set<T>().FirstOrDefaultAsync(x => x.Id == id);
+        IQueryable<T> query = _dbContext.Set<T>();
+
+        foreach (var include in includes)
+            query = query.Include(include);
+
+        return await query.FirstOrDefaultAsync(e => EF.Property<int>(e, "Id") == id);
     }
 
-    public async Task<IEnumerable<T>> GetAllAsync()
+    public async Task<IEnumerable<T>> GetAllAsync(params Expression<Func<T, object>>[] includes)
     {
-        try
-        {
-            return await _dbContext.Set<T>().ToListAsync();
+        IQueryable<T> query = _dbContext.Set<T>();
 
-        }
-        catch (Exception e)
-        {
-            throw new Exception(e.Message);
-        }
+        foreach (var include in includes)
+            query = query.Include(include);
+
+        return await query.ToListAsync();
     }
 
-    public async Task<IEnumerable<T>> SearchAsync(Expression<Func<T, bool>> predicate)
+    public async Task<IEnumerable<T>> SearchAsync(Expression<Func<T, bool>> predicate, params Expression<Func<T, object>>[] includes)
     {
-        var result = await _dbContext.Set<T>().Where(predicate).ToListAsync();
-        return result;
+        IQueryable<T> query = _dbContext.Set<T>();
+
+        foreach (var include in includes)
+            query = query.Include(include);
+
+        return await query.Where(predicate).ToListAsync();
     }
 
-
-    public async Task<T?> First(Expression<Func<T, bool>> predicate)
+    public async Task<T?> FirstAsync(Expression<Func<T, bool>> predicate, params Expression<Func<T, object>>[] includes)
     {
-        return await _dbContext.Set<T>().FirstOrDefaultAsync(predicate);
-    }
+        IQueryable<T> query = _dbContext.Set<T>();
 
+        foreach (var include in includes)
+            query = query.Include(include);
+
+        return await query.FirstOrDefaultAsync(predicate);
+    }
     protected virtual void Dispose(bool disposing)
     {
         if (!_disposed)
         {
             if (disposing)
             {
-                // Liberar los recursos administrados
                 _dbContext?.Dispose();
             }
-
-            // Marcar el objeto como descartado para evitar liberar más de una vez
             _disposed = true;
         }
     }
 
-    // Implementar IDisposable
-    //public void Dispose()
-    //{
-    //    Dispose(true);
-    //    GC.SuppressFinalize(this);
-    //}
     public DbContext DbContext()
     {
         return _dbContext;
