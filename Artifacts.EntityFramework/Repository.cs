@@ -1,6 +1,6 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using System.Linq.Expressions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using System.Linq.Expressions;
 using Utils.Exceptions;
 
 namespace Artifacts.EntityFramework;
@@ -77,7 +77,12 @@ public class Repository<T,TContext> : IRepository<T, TContext> where T : class, 
         foreach (var include in includes)
             query = query.Include(include);
 
-        return await query.FirstOrDefaultAsync(e => EF.Property<int>(e, "Id") == id);
+        if (typeof(IAuditableEntity).IsAssignableFrom(typeof(T)))
+        {
+            query = query.Where(e => ((IAuditableEntity)e).DeletedBy == null);
+        }
+
+        return await query.FirstOrDefaultAsync(e => e.Id == id);
     }
 
     public async Task<IEnumerable<T>> GetAllAsync(params Expression<Func<T, object>>[] includes)
@@ -86,6 +91,11 @@ public class Repository<T,TContext> : IRepository<T, TContext> where T : class, 
 
         foreach (var include in includes)
             query = query.Include(include);
+        
+        if (typeof(IAuditableEntity).IsAssignableFrom(typeof(T)))
+        {
+            query = query.Where(e => ((IAuditableEntity)e).DeletedBy == null);
+        }
 
         return await query.ToListAsync();
     }
@@ -97,6 +107,11 @@ public class Repository<T,TContext> : IRepository<T, TContext> where T : class, 
         foreach (var include in includes)
             query = query.Include(include);
 
+        if (typeof(IAuditableEntity).IsAssignableFrom(typeof(T)))
+        {
+            query = query.Where(e => ((IAuditableEntity)e).DeletedBy == null);
+        }
+
         return await query.Where(predicate).ToListAsync();
     }
 
@@ -106,6 +121,11 @@ public class Repository<T,TContext> : IRepository<T, TContext> where T : class, 
 
         foreach (var include in includes)
             query = query.Include(include);
+
+        if (typeof(IAuditableEntity).IsAssignableFrom(typeof(T)))
+        {
+            query = query.Where(e => ((IAuditableEntity)e).DeletedBy == null);
+        }
 
         return await query.FirstOrDefaultAsync(predicate);
     }
