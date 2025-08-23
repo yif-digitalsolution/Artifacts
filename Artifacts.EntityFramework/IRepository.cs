@@ -11,7 +11,8 @@ public interface IRepository<T, TContext> where T : class, IEntity, new () where
     Task<bool> DeleteAsync(int id);
     Task<T?> GetByIdAsync(int id, params Expression<Func<T, object>>[] includes);
     Task<IEnumerable<T>> GetAllAsync(params Expression<Func<T, object>>[] includes);
-    Task<IEnumerable<T>> SearchAsync(Expression<Func<T, bool>> predicate,  params Expression<Func<T, object>>[] includes);
-
+    Task<PagedResult<T>> PaginedSearchAsync(Expression<Func<T, bool>> predicate, int pageIndex = 1,
+                                            int pageSize = 10, params Expression<Func<T, object>>[] includes);
+    Task<IEnumerable<T>> SearchAsync(Expression<Func<T, bool>> predicate, params Expression<Func<T, object>>[] includes);
     Task<T?> FirstAsync(Expression<Func<T, bool>> predicate, params Expression<Func<T, object>>[] includes);
 }

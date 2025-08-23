@@ -4,13 +4,9 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Utils.Exceptions;
-
 // using FluentValidation;
 
 namespace Artifacts.Api;
-
-
-
 public class ExceptionMiddleware
 {
     private readonly RequestDelegate _next;
