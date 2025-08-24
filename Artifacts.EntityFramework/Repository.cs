@@ -6,7 +6,7 @@ using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace Artifacts.EntityFramework;
 
-public class Repository<T,TContext> : IRepository<T, TContext> where T : class, IEntity, new () where TContext : DbContext //IAuditableEntity, new()
+public class Repository<T, TContext> : IRepository<T, TContext> where T : class, IEntity, new() where TContext : DbContext //IAuditableEntity, new()
 {
     private readonly TContext _dbContext;
     private readonly IHttpContextAccessor _httpContextAccessor;
@@ -29,7 +29,7 @@ public class Repository<T,TContext> : IRepository<T, TContext> where T : class, 
                 auditableEntity.LastModifiedBy = 1;// _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
                 auditableEntity.LastModifiedDate = DateTime.Now;
             }
-            
+
             await _dbContext.Set<T>().AddAsync(entity);
             await _dbContext.SaveChangesAsync();
             return entity;
@@ -54,8 +54,11 @@ public class Repository<T,TContext> : IRepository<T, TContext> where T : class, 
             auditableEntity.CreatedDate = resultAuditable.CreatedDate;
             auditableEntity.CreatedBy = resultAuditable.CreatedBy;
         }
-        _dbContext.Update(entity);
+
+        _dbContext.Entry(result).CurrentValues.SetValues(entity);
         await _dbContext.SaveChangesAsync();
+
+
         return entity;
     }
     public async Task<bool> DeleteAsync(int id)
@@ -75,6 +78,8 @@ public class Repository<T,TContext> : IRepository<T, TContext> where T : class, 
     {
         IQueryable<T> query = _dbContext.Set<T>();
 
+
+
         foreach (var include in includes)
             query = query.Include(include);
 
@@ -83,7 +88,7 @@ public class Repository<T,TContext> : IRepository<T, TContext> where T : class, 
             query = query.Where(e => ((IAuditableEntity)e).DeletedBy == null);
         }
 
-        return await query.FirstOrDefaultAsync(e => e.Id == id);
+        return await query.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id);
     }
 
     public async Task<IEnumerable<T>> GetAllAsync(params Expression<Func<T, object>>[] includes)
@@ -92,13 +97,13 @@ public class Repository<T,TContext> : IRepository<T, TContext> where T : class, 
 
         foreach (var include in includes)
             query = query.Include(include);
-        
+
         if (typeof(IAuditableEntity).IsAssignableFrom(typeof(T)))
         {
             query = query.Where(e => ((IAuditableEntity)e).DeletedBy == null);
         }
 
-        return await query.ToListAsync();
+        return await query.AsNoTracking().ToListAsync();
     }
 
 
@@ -124,9 +129,11 @@ public class Repository<T,TContext> : IRepository<T, TContext> where T : class, 
     }
 
     public async Task<IEnumerable<T>> SearchAsync(Expression<Func<T, bool>> predicate, params Expression<Func<T, object>>[] includes)
+
     {
-        return await SearchAsync(predicate, pageIndex:null, pageSize: null, includes).ToListAsync();
+        return await SearchAsync(predicate, pageIndex: null, pageSize: null, includes).ToListAsync();
     }
+
 
     private IQueryable<T> SearchAsync(Expression<Func<T, bool>> predicate, int? pageIndex = null,
                                             int? pageSize = null, params Expression<Func<T, object>>[] includes)
@@ -150,7 +157,7 @@ public class Repository<T,TContext> : IRepository<T, TContext> where T : class, 
                 .Take(pageSize.Value);
         }
 
-        return  query.Where(predicate);
+        return query.AsNoTracking().Where(predicate);
     }
 
     public async Task<T?> FirstAsync(Expression<Func<T, bool>> predicate, params Expression<Func<T, object>>[] includes)
@@ -165,7 +172,7 @@ public class Repository<T,TContext> : IRepository<T, TContext> where T : class, 
             query = query.Where(e => ((IAuditableEntity)e).DeletedBy == null);
         }
 
-        return await query.FirstOrDefaultAsync(predicate);
+        return await query.AsNoTracking().FirstOrDefaultAsync(predicate);
     }
     protected virtual void Dispose(bool disposing)
     {
