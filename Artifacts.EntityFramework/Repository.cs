@@ -63,13 +63,22 @@ public class Repository<T, TContext> : IRepository<T, TContext> where T : class,
     }
     public async Task<bool> DeleteAsync(int id)
     {
-        var entity = _dbContext.Set<T>().FirstOrDefault(x => x.Id == id);
+        var entity = await _dbContext.Set<T>().FirstOrDefaultAsync(x => x.Id == id);
         if (entity == null)
         {
-            throw new NotFoundException($"No se encontro {nameof(T)} con el Id = {id}");
+            throw new Exception("No se encontró el registro para eliminar");
         }
 
-        _dbContext.Set<T>().Remove(entity);
+        if (entity is IAuditableEntity auditableEntity)
+        {
+            auditableEntity.DeletedBy = 1; // o usar _httpContextAccessor.HttpContext.User.Claims para usuario actual
+            auditableEntity.DeletedDate = DateTime.Now;
+            _dbContext.Update(auditableEntity);
+        }
+        else
+        {
+            _dbContext.Remove(entity);
+        }
         await _dbContext.SaveChangesAsync();
         return true;
     }
