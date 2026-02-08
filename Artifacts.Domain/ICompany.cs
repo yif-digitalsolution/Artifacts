@@ -1,6 +1,6 @@
 ﻿
 
-namespace Artifacts.EntityFramework;
+namespace Artifacts.Infrastructure;
 
 public interface ICompany<T> 
 {

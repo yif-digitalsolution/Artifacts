@@ -1,42 +1,47 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿namespace Utils;
 
-namespace Utils;
+public enum ResultErrorType
+{
+    None = 0,
+    Validation = 1,
+    NotFound = 2,
+    Forbidden = 3,
+    Error = 4
+}
 
 public class Result
 {
     public bool IsSuccess { get; }
-    public string Message { get; }
-    public bool IsFailure => !IsSuccess;
+    public string? Error { get; }
+    public ResultErrorType ErrorType { get; }
 
-    protected Result(bool isSuccess, string error)
+    protected Result(bool isSuccess, string? error, ResultErrorType errorType)
     {
         IsSuccess = isSuccess;
-        Message = error;
+        Error = error;
+        ErrorType = errorType;
     }
 
-    public static Result Success(string? message = null) => new Result(true, message);
-
-    public static Result Failure(string error) => new Result(false, error);
-
-    public IActionResult ToActionResult()
-    {
-        if (IsSuccess)
-            return new OkObjectResult(Message ?? "Success");
-
-        return new BadRequestObjectResult(Message);
-    }
+    public static Result Ok() => new(true, null, ResultErrorType.None);
+    public static Result Fail(string error) => new(false, error, ResultErrorType.Error);
+    public static Result Validation(string error) => new(false, error, ResultErrorType.Validation);
+    public static Result NotFound(string error) => new(false, error, ResultErrorType.NotFound);
+    public static Result Forbidden(string error) => new(false, error, ResultErrorType.Forbidden);
 }
+
 public class Result<T> : Result
 {
-    public T Value { get; }
+    public T? Value { get; }
 
-    private Result(bool isSuccess, T value, string error)
-        : base(isSuccess, error)
+    private Result(bool isSuccess, T? value, string? error, ResultErrorType errorType)
+        : base(isSuccess, error, errorType)
     {
         Value = value;
     }
 
-    public static Result<T> Success(T value) => new Result<T>(true, value, null);
-
-    public static Result<T> Failure(string error) => new Result<T>(false, default, error);
+    public static Result<T> Ok(T value) => new(true, value, null, ResultErrorType.None);
+    public static new Result<T> Fail(string error) => new(false, default, error, ResultErrorType.Error);
+    public static new Result<T> Validation(string error) => new(false, default, error, ResultErrorType.Validation);
+    public static new Result<T> NotFound(string error) => new(false, default, error, ResultErrorType.NotFound);
+    public static new Result<T> Forbidden(string error) => new(false, default, error, ResultErrorType.Forbidden);
 }

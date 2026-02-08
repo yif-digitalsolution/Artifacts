@@ -1,6 +1,6 @@
 ﻿using System.Linq.Expressions;
 
-namespace Artifacts.EntityFramework;
+namespace Artifacts.Infrastructure;
 
 public class QueryParameters<T>
 {

@@ -12,7 +12,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Artifacts.Domain\Artifacts.Domain.csproj" />
+    <ProjectReference Include="..\Utils\Common.csproj" />
   </ItemGroup>
 
 </Project>

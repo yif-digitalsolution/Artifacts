@@ -1,12 +1,11 @@
 ﻿using System.Linq.Expressions;
+using Artifacts.Utils;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Utils.Exceptions;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
-namespace Artifacts.EntityFramework;
+namespace Artifacts.Infrastructure;
 
-public class Repository<T, TContext> : IRepository<T, TContext> where T : class, IEntity, new() where TContext : DbContext //IAuditableEntity, new()
+public class Repository<T, TContext, TKey> : IRepository<T, TContext, TKey> where T : class, IEntity<TKey>, new() where TContext : DbContext //IAuditableEntity, new()
 {
     private readonly TContext _dbContext;
     private readonly IHttpContextAccessor _httpContextAccessor;
@@ -16,22 +15,58 @@ public class Repository<T, TContext> : IRepository<T, TContext> where T : class,
         _dbContext = dbContext;
         _httpContextAccessor = httpContextAccessor;
     }
+    //TODO: hacer uso de currentUser 
+    /*
+Applicacation      
+     public interface ICurrentUser
+{
+    int UserId { get; }
+    int CompanyId { get; }
+}
 
-    public async Task<T> InsertAsync(T entity)
+    Infra
+    public class CurrentUser : ICurrentUser
+{
+    private readonly IHttpContextAccessor _httpContext;
+
+    public CurrentUser(IHttpContextAccessor httpContext)
+    {
+        _httpContext = httpContext;
+    }
+
+    public int UserId =>
+        int.Parse(_httpContext.HttpContext!.User.FindFirst("UserId")!.Value);
+
+    public int CompanyId =>
+        int.Parse(_httpContext.HttpContext!.User.FindFirst("CompanyId")!.Value);
+}
+
+     
+     
+     */
+
+    public async Task<T> InsertAsync(T entity, CancellationToken ct, bool commitChanges = true )
     {
         try
         {
             //TODO: Validar que el usuario que esta insertando sea el mismo que creo el registro
-            if (entity is IAuditableEntity auditableEntity)
+            if (entity is IAuditable auditableEntity)
             {
-                auditableEntity.CreatedDate = DateTime.Now;
-                auditableEntity.CreatedBy = 1;//_httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
-                auditableEntity.LastModifiedBy = 1;// _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
-                auditableEntity.LastModifiedDate = DateTime.Now;
+                auditableEntity.CreatedAt = DateTime.Now;
+                auditableEntity.CreatedBy = _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "UserId")?.Value;
+                auditableEntity.UpdatedBy = _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "UserId")?.Value;
+                auditableEntity.UpdatedAt = DateTime.Now;
             }
+            if (entity is ICompany<TKey> companyEntity)
+            {
+                var companyIdClaim = _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "CompanyId");
+                
+                companyEntity.Company = (TKey)Convert.ChangeType(companyIdClaim.Value, typeof(TKey));
+            }  
 
             await _dbContext.Set<T>().AddAsync(entity);
-            await _dbContext.SaveChangesAsync();
+            if(commitChanges )
+                await _dbContext.SaveChangesAsync();
             return entity;
         }
         catch (Exception e)
@@ -41,18 +76,16 @@ public class Repository<T, TContext> : IRepository<T, TContext> where T : class,
     }
     public async Task<T> UpdateAsync(T entity)
     {
-        var result = await _dbContext.Set<T>().FirstOrDefaultAsync(x => x.Id == entity.Id);
+        var result = await _dbContext.Set<T>().FirstOrDefaultAsync(x => EqualityComparer<TKey>.Default.Equals(x.Id, entity.Id));
         if (result == null)
         {
             throw new Exception("No se encontró el registro para actualizar");
         }
 
-        if (entity is IAuditableEntity auditableEntity && result is IAuditableEntity resultAuditable)
+        if (entity is IAuditable auditableEntity && result is IAuditable resultAuditable)
         {
-            auditableEntity.LastModifiedBy = 1; //_httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "email")?.Value;
-            auditableEntity.LastModifiedDate = DateTime.Now;
-            auditableEntity.CreatedDate = resultAuditable.CreatedDate;
-            auditableEntity.CreatedBy = resultAuditable.CreatedBy;
+            auditableEntity.UpdatedBy = GetCurrentUserId()?.ToString();
+            auditableEntity.UpdatedAt = DateTime.Now;
         }
 
         _dbContext.Entry(result).CurrentValues.SetValues(entity);
@@ -61,18 +94,18 @@ public class Repository<T, TContext> : IRepository<T, TContext> where T : class,
 
         return entity;
     }
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<bool> DeleteAsync(TKey id)
     {
-        var entity = await _dbContext.Set<T>().FirstOrDefaultAsync(x => x.Id == id);
+        var entity = await _dbContext.Set<T>().FirstOrDefaultAsync(x => EqualityComparer<TKey>.Default.Equals(x.Id, id));
         if (entity == null)
         {
             throw new Exception("No se encontró el registro para eliminar");
         }
 
-        if (entity is IAuditableEntity auditableEntity)
+        if (entity is ISoftDelete auditableEntity)
         {
-            auditableEntity.DeletedBy = 1; // o usar _httpContextAccessor.HttpContext.User.Claims para usuario actual
-            auditableEntity.DeletedDate = DateTime.Now;
+            auditableEntity.DeletedBy = GetCurrentUserId()?.ToString();
+            auditableEntity.DeletedAt  = DateTime.Now;
             _dbContext.Update(auditableEntity);
         }
         else
@@ -83,7 +116,7 @@ public class Repository<T, TContext> : IRepository<T, TContext> where T : class,
         return true;
     }
 
-    public async Task<T?> GetByIdAsync(int id, params Expression<Func<T, object>>[] includes)
+    public async Task<T?> GetByIdAsync(TKey id, params Expression<Func<T, object>>[] includes)
     {
         IQueryable<T> query = _dbContext.Set<T>();
 
@@ -92,12 +125,12 @@ public class Repository<T, TContext> : IRepository<T, TContext> where T : class,
         foreach (var include in includes)
             query = query.Include(include);
 
-        if (typeof(IAuditableEntity).IsAssignableFrom(typeof(T)))
+        if (typeof(ISoftDelete).IsAssignableFrom(typeof(T)))
         {
-            query = query.Where(e => ((IAuditableEntity)e).DeletedBy == null);
+            query = query.Where(e => ((ISoftDelete)e).DeletedBy == null);
         }
 
-        return await query.AsNoTracking().FirstOrDefaultAsync(e => e.Id == id);
+        return await query.AsNoTracking().FirstOrDefaultAsync(e => EqualityComparer<TKey>.Default.Equals(e.Id, id));
     }
 
     public async Task<IEnumerable<T>> GetAllAsync(params Expression<Func<T, object>>[] includes)
@@ -107,9 +140,9 @@ public class Repository<T, TContext> : IRepository<T, TContext> where T : class,
         foreach (var include in includes)
             query = query.Include(include);
 
-        if (typeof(IAuditableEntity).IsAssignableFrom(typeof(T)))
+        if (typeof(ISoftDelete).IsAssignableFrom(typeof(T)))
         {
-            query = query.Where(e => ((IAuditableEntity)e).DeletedBy == null);
+            query = query.Where(e => ((ISoftDelete)e).DeletedBy == null);
         }
 
         return await query.AsNoTracking().ToListAsync();
@@ -127,14 +160,14 @@ public class Repository<T, TContext> : IRepository<T, TContext> where T : class,
         var items = await query
             .ToListAsync();
 
-        return new PagedResult<T>
-        {
-            PageIndex = pageIndex,
-            PageSize = pageSize,
-            TotalRecords = totalRecords,
-            TotalPages = totalPages,
-            Items = items
-        };
+        return new PagedResult<T>(
+                         items,
+                         pageIndex,
+                         pageSize,
+                         totalRecords,
+                         totalPages
+                     );
+     
     }
 
     public async Task<IEnumerable<T>> SearchAsync(Expression<Func<T, bool>> predicate, params Expression<Func<T, object>>[] includes)
@@ -152,9 +185,9 @@ public class Repository<T, TContext> : IRepository<T, TContext> where T : class,
         foreach (var include in includes)
             query = query.Include(include);
 
-        if (typeof(IAuditableEntity).IsAssignableFrom(typeof(T)))
+        if (typeof(ISoftDelete).IsAssignableFrom(typeof(T)))
         {
-            query = query.Where(e => ((IAuditableEntity)e).DeletedBy == null);
+            query = query.Where(e => ((ISoftDelete)e).DeletedBy == null);
         }
 
         query = query.Where(predicate);
@@ -169,16 +202,16 @@ public class Repository<T, TContext> : IRepository<T, TContext> where T : class,
         return query.AsNoTracking().Where(predicate);
     }
 
-    public async Task<T?> FirstAsync(Expression<Func<T, bool>> predicate, params Expression<Func<T, object>>[] includes)
+    public async Task<T?> FirstAsync(Expression<Func<T, bool>> predicate, CancellationToken cancellationToken = default, params Expression<Func<T, object>>[] includes)
     {
         IQueryable<T> query = _dbContext.Set<T>();
 
         foreach (var include in includes)
             query = query.Include(include);
 
-        if (typeof(IAuditableEntity).IsAssignableFrom(typeof(T)))
+        if (typeof(ISoftDelete).IsAssignableFrom(typeof(T)))
         {
-            query = query.Where(e => ((IAuditableEntity)e).DeletedBy == null);
+            query = query.Where(e => ((ISoftDelete)e).DeletedBy == null);
         }
 
         return await query.AsNoTracking().FirstOrDefaultAsync(predicate);
@@ -199,5 +232,24 @@ public class Repository<T, TContext> : IRepository<T, TContext> where T : class,
     {
         return _dbContext;
 
+
+    }
+
+
+    private TKey GetCurrentUserId()
+    {
+        var userIdClaim = _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "UserId");
+        if (userIdClaim == null)
+        {
+            throw new Exception("No se encontró el UserId en los claims del usuario.");
+        }
+        return (TKey)Convert.ChangeType(userIdClaim.Value, typeof(TKey));
+    }
+
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 }
