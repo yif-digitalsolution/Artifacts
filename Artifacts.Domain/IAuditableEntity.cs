@@ -8,10 +8,3 @@ public interface IAuditable
     DateTime? UpdatedAt { get; set; }
     string? UpdatedBy { get; set; }
 }
-
-public interface ISoftDelete
-{
-    bool IsDeleted { get; set; }
-    DateTime? DeletedAt { get; set; }
-    string? DeletedBy { get; set; }
-}

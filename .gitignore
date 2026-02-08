@@ -15,3 +15,5 @@
 /Utils/obj
 /Artifacts.Domain/obj
 Artifacts.Domain/bin
+Artifacts.Infrastructure/bin
+Artifacts.Infrastructure/obj
