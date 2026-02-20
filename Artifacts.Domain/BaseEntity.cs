@@ -24,6 +24,3 @@ public abstract class BaseTenantEntity
     public Guid BranchId { get; set; }
 }
 
-public abstract class BaseEntity : BaseTenantEntity
-{
-}
