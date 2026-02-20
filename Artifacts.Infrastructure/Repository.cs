@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Artifacts.Infrastructure;
 
-public class Repository<T, TContext, TKey> : IRepository<T, TContext, TKey> where T : class, IEntity<TKey>, new() where TContext : DbContext //IAuditableEntity, new()
+public class Repository<T, TContext, TKey> : IRepository<T, TContext, TKey> where T : class, IEntity<TKey>, new() where TContext : DbContext
 {
     private readonly TContext _dbContext;
     private readonly IHttpContextAccessor _httpContextAccessor;
@@ -15,6 +15,7 @@ public class Repository<T, TContext, TKey> : IRepository<T, TContext, TKey> wher
         _dbContext = dbContext;
         _httpContextAccessor = httpContextAccessor;
     }
+
     //TODO: hacer uso de currentUser 
     /*
 Applicacation      
@@ -52,17 +53,17 @@ Applicacation
             //TODO: Validar que el usuario que esta insertando sea el mismo que creo el registro
             if (entity is IAuditable auditableEntity)
             {
-                auditableEntity.CreatedAt = DateTime.Now;
-                auditableEntity.CreatedBy = _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "UserId")?.Value;
-                auditableEntity.UpdatedBy = _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "UserId")?.Value;
-                auditableEntity.UpdatedAt = DateTime.Now;
+                auditableEntity.CreatedAt = DateTime.UtcNow;
+                auditableEntity.CreatedBy = GetCurrentUserId().ToString();
+                auditableEntity.UpdatedBy = GetCurrentUserId().ToString();
+                auditableEntity.UpdatedAt = DateTime.UtcNow;
             }
             if (entity is ICompany<TKey> companyEntity)
             {
                 var companyIdClaim = _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "CompanyId");
-                
+
                 companyEntity.Company = (TKey)Convert.ChangeType(companyIdClaim.Value, typeof(TKey));
-            }  
+            }
 
             await _dbContext.Set<T>().AddAsync(entity);
             if(commitChanges )
@@ -84,8 +85,8 @@ Applicacation
 
         if (entity is IAuditable auditableEntity && result is IAuditable resultAuditable)
         {
-            auditableEntity.UpdatedBy = GetCurrentUserId()?.ToString();
-            auditableEntity.UpdatedAt = DateTime.Now;
+            auditableEntity.UpdatedBy = GetCurrentUserId().ToString();
+            auditableEntity.UpdatedAt = DateTime.UtcNow;
         }
 
         _dbContext.Entry(result).CurrentValues.SetValues(entity);
@@ -104,8 +105,8 @@ Applicacation
 
         if (entity is ISoftDelete auditableEntity)
         {
-            auditableEntity.DeletedBy = GetCurrentUserId()?.ToString();
-            auditableEntity.DeletedAt  = DateTime.Now;
+            auditableEntity.DeletedBy = GetCurrentUserId().ToString();
+            auditableEntity.DeletedAt  = DateTime.UtcNow;
             _dbContext.Update(auditableEntity);
         }
         else
@@ -119,7 +120,6 @@ Applicacation
     public async Task<T?> GetByIdAsync(TKey id, params Expression<Func<T, object>>[] includes)
     {
         IQueryable<T> query = _dbContext.Set<T>();
-
 
 
         foreach (var include in includes)
@@ -236,14 +236,15 @@ Applicacation
     }
 
 
-    private TKey GetCurrentUserId()
+    private Guid GetCurrentUserId()
     {
         var userIdClaim = _httpContextAccessor.HttpContext.User.Claims.FirstOrDefault(x => x.Type == "UserId");
         if (userIdClaim == null)
         {
             throw new Exception("No se encontró el UserId en los claims del usuario.");
+            
         }
-        return (TKey)Convert.ChangeType(userIdClaim.Value, typeof(TKey));
+        return Guid.NewGuid(); // (TKey)Convert.ChangeType(userIdClaim.Value, typeof(TKey));
     }
 
 
